@@ -1,0 +1,312 @@
+syntax = "proto3";
+
+package manga.v1;
+
+// Manga entry from the database
+message Manga {
+  int64 id = 1;
+  optional string mangadex_id = 2;
+  optional int64 anilist_id = 3;
+  optional int64 mal_id = 4;
+  optional string title_romaji = 5;
+  optional string title_english = 6;
+  optional string title_native = 7;
+  optional string author = 8;
+  optional string artist = 9;
+  optional string status = 10;
+  optional int32 year = 11;
+  repeated Tag tags = 12;
+  // Current user's rating (only populated for authenticated requests)
+  optional Rating my_rating = 13;
+  // Current user's reading status (only populated for authenticated requests)
+  optional UserReadingStatus my_reading_status = 14;
+  // Aggregate scores from various sources
+  optional MangaScores scores = 15;
+  // Cover image URL (typically from MangaDex)
+  optional string cover_url = 16;
+}
+
+// Aggregate scores from various sources
+message MangaScores {
+  // Average score from our users (1-10 scale, null if no ratings)
+  optional float user_score = 1;
+  // Number of user ratings
+  int32 user_count = 2;
+  // MangaDex rating (1-10 scale)
+  optional float mangadex_score = 3;
+  // AniList score (1-100 scale, displayed as percentage)
+  optional int32 anilist_score = 4;
+  // MyAnimeList score (1-10 scale)
+  optional float mal_score = 5;
+}
+
+// User's rating for a manga (1-10 scale)
+message Rating {
+  int64 manga_id = 1;
+  int32 score = 2;  // 1-10
+  string created_at = 3;
+  string updated_at = 4;
+}
+
+// Reading status enum
+enum ReadingStatus {
+  READING_STATUS_UNSPECIFIED = 0;
+  READING_STATUS_PLANNING = 1;
+  READING_STATUS_READING = 2;
+  READING_STATUS_COMPLETED = 3;
+  READING_STATUS_ON_HOLD = 4;
+  READING_STATUS_DROPPED = 5;
+  READING_STATUS_NOT_INTERESTED = 6;
+}
+
+// Personal rating enum (5-tier quality assessment)
+enum PersonalRating {
+  PERSONAL_RATING_UNSPECIFIED = 0;
+  PERSONAL_RATING_BAD = 1;
+  PERSONAL_RATING_SO_SO = 2;
+  PERSONAL_RATING_OK = 3;
+  PERSONAL_RATING_GOOD = 4;
+  PERSONAL_RATING_GREAT = 5;
+}
+
+// User's reading status for a manga
+message UserReadingStatus {
+  int64 manga_id = 1;
+  ReadingStatus status = 2;
+  string created_at = 3;
+  string updated_at = 4;
+  optional string progress = 5;  // Free-form progress text (e.g., "Ch. 45", "Vol 3")
+}
+
+// Tag from MangaDex
+message Tag {
+  string name = 1;
+  string group = 2;  // "genre", "theme", "format", "content"
+}
+
+// Pagination info
+message PageInfo {
+  int64 total = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+  int32 total_pages = 4;
+}
+
+// Sort field options
+enum SortBy {
+  SORT_BY_UNSPECIFIED = 0;  // Default: date added (newest first)
+  SORT_BY_TITLE = 1;
+  SORT_BY_YEAR = 2;
+  SORT_BY_DATE_ADDED = 3;
+  SORT_BY_SCORE = 4;  // User aggregate score (highest first)
+  SORT_BY_POPULARITY = 5;  // View count in last 30 days (most viewed first)
+}
+
+// Sort order
+enum SortOrder {
+  SORT_ORDER_UNSPECIFIED = 0;  // Default: ascending
+  SORT_ORDER_ASC = 1;
+  SORT_ORDER_DESC = 2;
+}
+
+// Filter options for listing manga
+message MangaFilter {
+  optional string status = 1;
+  optional int32 year = 2;
+  optional int32 year_from = 3;
+  optional int32 year_to = 4;
+  optional string author = 5;
+  // Filter by title language availability: "en", "ja", "romaji"
+  // Only returns manga that have a title in this language
+  optional string title_language = 6;
+}
+
+// Database statistics
+message Stats {
+  int64 cleaned_manga = 1;
+  int64 raw_manga = 2;
+}
+
+// Request/Response messages
+message GetMangaRequest {
+  int64 id = 1;
+}
+
+message GetMangaByMangadexRequest {
+  string mangadex_id = 1;
+}
+
+message ListMangaRequest {
+  int32 page = 1;
+  int32 per_page = 2;
+  optional MangaFilter filter = 3;
+  SortBy sort_by = 4;
+  SortOrder sort_order = 5;
+}
+
+message ListMangaResponse {
+  repeated Manga items = 1;
+  PageInfo page_info = 2;
+}
+
+message GetStatsRequest {}
+
+message SearchMangaRequest {
+  string query = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message SearchMangaResponse {
+  repeated Manga items = 1;
+  int64 estimated_total = 2;
+  int32 processing_time_ms = 3;
+}
+
+// Rate a manga (requires authentication)
+message RateMangaRequest {
+  int64 manga_id = 1;
+  int32 score = 2;  // 1-10
+}
+
+// Delete a rating (requires authentication)
+message DeleteRatingRequest {
+  int64 manga_id = 1;
+}
+
+message DeleteRatingResponse {}
+
+// Set reading status (requires authentication)
+message SetReadingStatusRequest {
+  int64 manga_id = 1;
+  ReadingStatus status = 2;
+  optional string progress = 3;  // Optional progress text to set along with status
+}
+
+// Set personal rating (requires authentication)
+message SetPersonalRatingRequest {
+  int64 manga_id = 1;
+  PersonalRating rating = 2;
+}
+
+message SetPersonalRatingResponse {
+  int64 manga_id = 1;
+  PersonalRating rating = 2;
+}
+
+// Set progress text (requires authentication)
+message SetProgressRequest {
+  int64 manga_id = 1;
+  string progress = 2;  // Free-form progress text (e.g., "Ch. 45", "Vol 3")
+}
+
+message SetProgressResponse {
+  int64 manga_id = 1;
+  string progress = 2;
+}
+
+// Status history entry (changelog for reading status changes)
+message StatusHistoryEntry {
+  ReadingStatus old_status = 1;  // READING_STATUS_UNSPECIFIED = initial entry
+  ReadingStatus new_status = 2;
+  string created_at = 3;
+}
+
+// Get status history (requires authentication)
+message GetStatusHistoryRequest {
+  int64 manga_id = 1;
+}
+
+message GetStatusHistoryResponse {
+  repeated StatusHistoryEntry entries = 1;
+}
+
+// Delete reading status (requires authentication)
+message DeleteReadingStatusRequest {
+  int64 manga_id = 1;
+}
+
+message DeleteReadingStatusResponse {}
+
+// List user's manga by reading status
+message ListUserMangaRequest {
+  // Optional: filter by status. If not set, returns all user's manga
+  optional ReadingStatus status = 1;
+}
+
+message ListUserMangaResponse {
+  repeated UserMangaEntry items = 1;
+}
+
+// Create a custom manga entry (not in the database)
+message CreateCustomMangaRequest {
+  string title = 1;
+  optional string author = 2;
+  ReadingStatus status = 3;
+}
+
+message CreateCustomMangaResponse {
+  int64 manga_id = 1;  // Negative ID for custom manga
+  UserReadingStatus reading_status = 2;
+}
+
+// A manga entry with user's reading status
+message UserMangaEntry {
+  int64 manga_id = 1;
+  string title = 2;
+  optional string title_native = 3;
+  optional string author = 4;
+  ReadingStatus status = 5;
+  string updated_at = 6;
+  PersonalRating personal_rating = 7;
+  optional string progress = 8;  // Free-form progress text (e.g., "Ch. 45", "Vol 3")
+  optional string cover_url = 9;  // Cover image URL
+}
+
+// Manga service - manga database operations
+service MangaService {
+  // Get a manga by internal ID
+  rpc GetManga(GetMangaRequest) returns (Manga);
+
+  // Get a manga by MangaDex ID
+  rpc GetMangaByMangadex(GetMangaByMangadexRequest) returns (Manga);
+
+  // List manga with pagination and filters
+  rpc ListManga(ListMangaRequest) returns (ListMangaResponse);
+
+  // Get database statistics
+  rpc GetStats(GetStatsRequest) returns (Stats);
+
+  // Search manga using full-text search
+  rpc SearchManga(SearchMangaRequest) returns (SearchMangaResponse);
+
+  // Rate a manga (requires authentication via Authorization header)
+  rpc RateManga(RateMangaRequest) returns (Rating);
+
+  // Delete a rating (requires authentication via Authorization header)
+  rpc DeleteRating(DeleteRatingRequest) returns (DeleteRatingResponse);
+}
+
+// Tracker service - personal tracking and progress
+service TrackerService {
+  // Set reading status (requires authentication)
+  rpc SetReadingStatus(SetReadingStatusRequest) returns (UserReadingStatus);
+
+  // Set personal rating (requires authentication)
+  rpc SetPersonalRating(SetPersonalRatingRequest) returns (SetPersonalRatingResponse);
+
+  // Set progress text (requires authentication)
+  rpc SetProgress(SetProgressRequest) returns (SetProgressResponse);
+
+  // Delete reading status (requires authentication)
+  rpc DeleteReadingStatus(DeleteReadingStatusRequest) returns (DeleteReadingStatusResponse);
+
+  // List user's tracked manga (requires authentication)
+  rpc ListUserManga(ListUserMangaRequest) returns (ListUserMangaResponse);
+
+  // Create a custom manga entry (requires authentication)
+  rpc CreateCustomManga(CreateCustomMangaRequest) returns (CreateCustomMangaResponse);
+
+  // Get status history for a manga (requires authentication)
+  rpc GetStatusHistory(GetStatusHistoryRequest) returns (GetStatusHistoryResponse);
+}

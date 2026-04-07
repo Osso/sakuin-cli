@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package manga.v1;
+
+// Task status
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_FAILED = 4;
+}
+
+// Task type
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_FETCH_MANGADEX = 1;
+  TASK_TYPE_FETCH_ANILIST = 2;
+  TASK_TYPE_CORRELATE = 3;
+  TASK_TYPE_SYNC_MEILISEARCH = 4;
+}
+
+// Background task
+message Task {
+  int64 id = 1;
+  TaskType task_type = 2;
+  TaskStatus status = 3;
+  optional string result = 4;
+  string created_at = 5;
+  string updated_at = 6;
+
+  // Task-specific parameters (JSON encoded for flexibility)
+  optional string params_json = 7;
+
+  // Recurring task fields
+  optional uint32 interval_seconds = 8;  // If set, task repeats at this interval
+  optional string next_run_at = 9;       // When recurring task should run next
+  bool is_recurring = 10;                // Whether this is a recurring task
+  bool is_paused = 11;                   // Whether recurring task is paused
+}
+
+// Request/Response messages
+message ScheduleFetchMangadexRequest {
+  uint32 offset = 1;
+  uint32 limit = 2;
+  optional uint32 year = 3;
+  optional uint32 interval_seconds = 4;  // If set, task repeats at this interval
+}
+
+message ScheduleFetchAnilistRequest {
+  uint32 limit = 1;
+  optional uint32 interval_seconds = 2;  // If set, task repeats at this interval
+}
+
+message ScheduleCorrelateRequest {
+  optional uint32 interval_seconds = 1;  // If set, task repeats at this interval
+}
+
+message ScheduleSyncMeilisearchRequest {
+  uint32 batch_size = 1;
+  optional uint32 interval_seconds = 2;  // If set, task repeats at this interval
+}
+
+message CancelRecurringTaskRequest {
+  int64 id = 1;
+}
+
+message CancelRecurringTaskResponse {}
+
+message PauseRecurringTaskRequest {
+  int64 id = 1;
+}
+
+message PauseRecurringTaskResponse {}
+
+message ResumeRecurringTaskRequest {
+  int64 id = 1;
+}
+
+message ResumeRecurringTaskResponse {}
+
+message TriggerTaskRequest {
+  int64 id = 1;
+}
+
+message TriggerTaskResponse {}
+
+message GetTaskRequest {
+  int64 id = 1;
+}
+
+message ListTasksRequest {
+  optional uint32 limit = 1;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+// Task service
+service TaskService {
+  // Schedule a MangaDex fetch task
+  rpc ScheduleFetchMangadex(ScheduleFetchMangadexRequest) returns (Task);
+
+  // Schedule an AniList fetch task
+  rpc ScheduleFetchAnilist(ScheduleFetchAnilistRequest) returns (Task);
+
+  // Schedule a correlate task
+  rpc ScheduleCorrelate(ScheduleCorrelateRequest) returns (Task);
+
+  // Schedule a Meilisearch sync task
+  rpc ScheduleSyncMeilisearch(ScheduleSyncMeilisearchRequest) returns (Task);
+
+  // Get a task by ID
+  rpc GetTask(GetTaskRequest) returns (Task);
+
+  // List recent tasks
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // Cancel a recurring task (stops future executions)
+  rpc CancelRecurringTask(CancelRecurringTaskRequest) returns (CancelRecurringTaskResponse);
+
+  // Pause a recurring task (temporarily stops executions)
+  rpc PauseRecurringTask(PauseRecurringTaskRequest) returns (PauseRecurringTaskResponse);
+
+  // Resume a paused recurring task
+  rpc ResumeRecurringTask(ResumeRecurringTaskRequest) returns (ResumeRecurringTaskResponse);
+
+  // Trigger a task to run immediately
+  rpc TriggerTask(TriggerTaskRequest) returns (TriggerTaskResponse);
+}

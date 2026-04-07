@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package manga.v1;
+
+import "manga/v1/auth.proto";
+
+// Update user profile
+message UpdateUserRequest {
+  string token = 1;
+  optional string username = 2;
+  optional string custom_css = 3;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+// Get user stats (requires auth)
+message GetUserStatsRequest {
+  string token = 1;
+}
+
+message GetUserStatsResponse {
+  UserStats stats = 1;
+}
+
+// User statistics
+message UserStats {
+  // Manga count by reading status
+  int32 planning = 1;
+  int32 reading = 2;
+  int32 completed = 3;
+  int32 on_hold = 4;
+  int32 dropped = 5;
+  int32 not_interested = 6;
+  // Total manga tracked
+  int32 total = 7;
+  // Average score given (from user_ratings, 1-10 scale)
+  optional float average_score = 8;
+  // Number of manga rated
+  int32 ratings_count = 9;
+}
+
+// User profile management
+service UserService {
+  // Update user profile (requires auth)
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+
+  // Get user statistics (requires auth)
+  rpc GetUserStats(GetUserStatsRequest) returns (GetUserStatsResponse);
+}

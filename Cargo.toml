@@ -1,0 +1,26 @@
+[package]
+name = "sakuin-cli"
+version = "0.1.0"
+edition = "2024"
+description = "CLI client for Sakuin manga database API"
+repository = "https://github.com/Osso/sakuin-cli"
+license = "MIT"
+
+[[bin]]
+name = "sakuin"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tonic = { version = "0.12", features = ["tls", "tls-roots"] }
+prost = "0.13"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "5"
+anyhow = "1"
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+base64 = "0.22"
+
+[build-dependencies]
+tonic-build = "0.12"

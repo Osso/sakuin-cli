@@ -144,200 +144,247 @@ async fn main() -> Result<()> {
         Command::Config {
             server: new_server,
             token: new_token,
-        } => {
-            let mut config = load_config();
-            if let Some(s) = new_server {
-                config.server = Some(s);
-            }
-            if let Some(t) = new_token {
-                config.token = Some(t);
-            }
-            save_config(&config)?;
-            println!("Config saved to {}", config_path().display());
-            if let Some(s) = &config.server {
-                println!("  server: {}", s);
-            }
-            if config.token.is_some() {
-                println!("  token: (set)");
-            }
-        }
+        } => update_config(new_server, new_token)?,
 
-        Command::Stats => {
-            let client = GrpcWebClient::new(server, None);
-            let resp: proto::Stats = client
-                .call("manga.v1.MangaService", "GetStats", GetStatsRequest {})
-                .await?;
-            println!("Cleaned manga: {}", resp.cleaned_manga);
-            println!("Raw manga: {}", resp.raw_manga);
-        }
+        Command::Stats => fetch_stats(server).await?,
 
-        Command::Search { query, limit } => {
-            let client = GrpcWebClient::new(server, None);
-            let resp: proto::SearchMangaResponse = client
-                .call(
-                    "manga.v1.MangaService",
-                    "SearchManga",
-                    SearchMangaRequest {
-                        query,
-                        limit,
-                        offset: 0,
-                    },
-                )
-                .await?;
-            println!(
-                "Found {} results ({}ms)",
-                resp.estimated_total, resp.processing_time_ms
-            );
-            for manga in resp.items {
-                let title = manga
-                    .title_english
-                    .or(manga.title_romaji)
-                    .unwrap_or_default();
-                println!("{}: {}", manga.id, title);
-            }
-        }
+        Command::Search { query, limit } => search_manga(server, query, limit).await?,
 
-        Command::Get { id } => {
-            let client = GrpcWebClient::new(server, None);
-            let manga: Manga = client
-                .call("manga.v1.MangaService", "GetManga", GetMangaRequest { id })
-                .await?;
-            println!("{}", serde_json::to_string_pretty(&manga_to_json(&manga))?);
-        }
+        Command::Get { id } => get_manga(server, id).await?,
 
-        Command::List { page, per_page } => {
-            let client = GrpcWebClient::new(server, None);
-            let resp: proto::ListMangaResponse = client
-                .call(
-                    "manga.v1.MangaService",
-                    "ListManga",
-                    ListMangaRequest {
-                        page,
-                        per_page,
-                        filter: None,
-                        sort_by: 0,
-                        sort_order: 0,
-                    },
-                )
-                .await?;
-            if let Some(info) = resp.page_info {
-                println!(
-                    "Page {} of {} ({} total)",
-                    info.page, info.total_pages, info.total
-                );
-            }
-            for manga in resp.items {
-                let title = manga
-                    .title_english
-                    .or(manga.title_romaji)
-                    .unwrap_or_default();
-                println!("{}: {}", manga.id, title);
-            }
-        }
+        Command::List { page, per_page } => list_manga(server, page, per_page).await?,
 
-        Command::ListMine { status } => {
-            let token = token.context("API token required. Run: sakuin config --token <token>")?;
-            let client = GrpcWebClient::new(server, Some(token));
-            let status_filter = status.map(|s| parse_status(&s)).transpose()?;
-            let resp: proto::ListUserMangaResponse = client
-                .call(
-                    "manga.v1.TrackerService",
-                    "ListUserManga",
-                    ListUserMangaRequest {
-                        status: status_filter.map(|s| s as i32),
-                    },
-                )
-                .await?;
-            for entry in resp.items {
-                let progress = entry
-                    .progress
-                    .map(|p| format!(" [{}]", p))
-                    .unwrap_or_default();
-                println!(
-                    "{}: {} ({}){}",
-                    entry.manga_id,
-                    entry.title,
-                    format_status(entry.status),
-                    progress
-                );
-            }
-        }
+        Command::ListMine { status } => list_mine(server, token, status).await?,
 
-        Command::Track { manga_id, status } => {
-            let token = token.context("API token required. Run: sakuin config --token <token>")?;
-            let client = GrpcWebClient::new(server, Some(token));
-            let status = parse_status(&status)?;
-            let resp: proto::UserReadingStatus = client
-                .call(
-                    "manga.v1.TrackerService",
-                    "SetReadingStatus",
-                    SetReadingStatusRequest {
-                        manga_id,
-                        status: status as i32,
-                        progress: None,
-                    },
-                )
-                .await?;
-            println!("Set {} to {}", manga_id, format_status(resp.status));
-        }
+        Command::Track { manga_id, status } => track_manga(server, token, manga_id, status).await?,
 
         Command::Progress { manga_id, progress } => {
-            let token = token.context("API token required. Run: sakuin config --token <token>")?;
-            let client = GrpcWebClient::new(server, Some(token));
-            let resp: proto::SetProgressResponse = client
-                .call(
-                    "manga.v1.TrackerService",
-                    "SetProgress",
-                    SetProgressRequest { manga_id, progress },
-                )
-                .await?;
-            println!("Set {} progress to {}", manga_id, resp.progress);
+            set_progress(server, token, manga_id, progress).await?
         }
 
-        Command::Rate { manga_id, score } => {
-            if !(1..=10).contains(&score) {
-                anyhow::bail!("Score must be 1-10");
-            }
-            let token = token.context("API token required. Run: sakuin config --token <token>")?;
-            let client = GrpcWebClient::new(server, Some(token));
-            let resp: proto::Rating = client
-                .call(
-                    "manga.v1.MangaService",
-                    "RateManga",
-                    RateMangaRequest { manga_id, score },
-                )
-                .await?;
-            println!("Rated {} as {}/10", manga_id, resp.score);
-        }
+        Command::Rate { manga_id, score } => rate_manga(server, token, manga_id, score).await?,
 
-        Command::StatsMine => {
-            let token = token.context("API token required. Run: sakuin config --token <token>")?;
-            let client = GrpcWebClient::new(server, Some(token));
-            let resp: proto::GetUserStatsResponse = client
-                .call(
-                    "manga.v1.UserService",
-                    "GetUserStats",
-                    GetUserStatsRequest {
-                        token: String::new(),
-                    },
-                )
-                .await?;
-            if let Some(stats) = resp.stats {
-                println!("Planning: {}", stats.planning);
-                println!("Reading: {}", stats.reading);
-                println!("Completed: {}", stats.completed);
-                println!("On hold: {}", stats.on_hold);
-                println!("Dropped: {}", stats.dropped);
-                println!("Not interested: {}", stats.not_interested);
-                println!("Total: {}", stats.total);
-                if let Some(avg) = stats.average_score {
-                    println!("Average score: {:.1}", avg);
-                }
-                println!("Ratings count: {}", stats.ratings_count);
-            }
-        }
+        Command::StatsMine => fetch_user_stats(server, token).await?,
     }
 
+    Ok(())
+}
+
+fn update_config(new_server: Option<String>, new_token: Option<String>) -> Result<()> {
+    let mut config = load_config();
+    if let Some(s) = new_server {
+        config.server = Some(s);
+    }
+    if let Some(t) = new_token {
+        config.token = Some(t);
+    }
+    save_config(&config)?;
+    println!("Config saved to {}", config_path().display());
+    if let Some(s) = &config.server {
+        println!("  server: {}", s);
+    }
+    if config.token.is_some() {
+        println!("  token: (set)");
+    }
+    Ok(())
+}
+
+async fn fetch_stats(server: String) -> Result<()> {
+    let client = GrpcWebClient::new(server, None);
+    let resp: proto::Stats = client
+        .call("manga.v1.MangaService", "GetStats", GetStatsRequest {})
+        .await?;
+    println!("Cleaned manga: {}", resp.cleaned_manga);
+    println!("Raw manga: {}", resp.raw_manga);
+    Ok(())
+}
+
+async fn search_manga(server: String, query: String, limit: i32) -> Result<()> {
+    let client = GrpcWebClient::new(server, None);
+    let resp: proto::SearchMangaResponse = client
+        .call(
+            "manga.v1.MangaService",
+            "SearchManga",
+            SearchMangaRequest {
+                query,
+                limit,
+                offset: 0,
+            },
+        )
+        .await?;
+    println!(
+        "Found {} results ({}ms)",
+        resp.estimated_total, resp.processing_time_ms
+    );
+    for manga in resp.items {
+        let title = manga
+            .title_english
+            .or(manga.title_romaji)
+            .unwrap_or_default();
+        println!("{}: {}", manga.id, title);
+    }
+    Ok(())
+}
+
+async fn get_manga(server: String, id: i64) -> Result<()> {
+    let client = GrpcWebClient::new(server, None);
+    let manga: Manga = client
+        .call("manga.v1.MangaService", "GetManga", GetMangaRequest { id })
+        .await?;
+    println!("{}", serde_json::to_string_pretty(&manga_to_json(&manga))?);
+    Ok(())
+}
+
+async fn list_manga(server: String, page: i32, per_page: i32) -> Result<()> {
+    let client = GrpcWebClient::new(server, None);
+    let resp: proto::ListMangaResponse = client
+        .call(
+            "manga.v1.MangaService",
+            "ListManga",
+            ListMangaRequest {
+                page,
+                per_page,
+                filter: None,
+                sort_by: 0,
+                sort_order: 0,
+            },
+        )
+        .await?;
+    if let Some(info) = resp.page_info {
+        println!(
+            "Page {} of {} ({} total)",
+            info.page, info.total_pages, info.total
+        );
+    }
+    for manga in resp.items {
+        let title = manga
+            .title_english
+            .or(manga.title_romaji)
+            .unwrap_or_default();
+        println!("{}: {}", manga.id, title);
+    }
+    Ok(())
+}
+
+async fn list_mine(server: String, token: Option<String>, status: Option<String>) -> Result<()> {
+    let token = token.context("API token required. Run: sakuin config --token <token>")?;
+    let client = GrpcWebClient::new(server, Some(token));
+    let status_filter = status.map(|s| parse_status(&s)).transpose()?;
+    let resp: proto::ListUserMangaResponse = client
+        .call(
+            "manga.v1.TrackerService",
+            "ListUserManga",
+            ListUserMangaRequest {
+                status: status_filter.map(|s| s as i32),
+            },
+        )
+        .await?;
+    for entry in resp.items {
+        let progress = entry
+            .progress
+            .map(|p| format!(" [{}]", p))
+            .unwrap_or_default();
+        println!(
+            "{}: {} ({}){}",
+            entry.manga_id,
+            entry.title,
+            format_status(entry.status),
+            progress
+        );
+    }
+    Ok(())
+}
+
+async fn track_manga(
+    server: String,
+    token: Option<String>,
+    manga_id: i64,
+    status: String,
+) -> Result<()> {
+    let token = token.context("API token required. Run: sakuin config --token <token>")?;
+    let client = GrpcWebClient::new(server, Some(token));
+    let status = parse_status(&status)?;
+    let resp: proto::UserReadingStatus = client
+        .call(
+            "manga.v1.TrackerService",
+            "SetReadingStatus",
+            SetReadingStatusRequest {
+                manga_id,
+                status: status as i32,
+                progress: None,
+            },
+        )
+        .await?;
+    println!("Set {} to {}", manga_id, format_status(resp.status));
+    Ok(())
+}
+
+async fn set_progress(
+    server: String,
+    token: Option<String>,
+    manga_id: i64,
+    progress: String,
+) -> Result<()> {
+    let token = token.context("API token required. Run: sakuin config --token <token>")?;
+    let client = GrpcWebClient::new(server, Some(token));
+    let resp: proto::SetProgressResponse = client
+        .call(
+            "manga.v1.TrackerService",
+            "SetProgress",
+            SetProgressRequest { manga_id, progress },
+        )
+        .await?;
+    println!("Set {} progress to {}", manga_id, resp.progress);
+    Ok(())
+}
+
+async fn rate_manga(
+    server: String,
+    token: Option<String>,
+    manga_id: i64,
+    score: i32,
+) -> Result<()> {
+    if !(1..=10).contains(&score) {
+        anyhow::bail!("Score must be 1-10");
+    }
+    let token = token.context("API token required. Run: sakuin config --token <token>")?;
+    let client = GrpcWebClient::new(server, Some(token));
+    let resp: proto::Rating = client
+        .call(
+            "manga.v1.MangaService",
+            "RateManga",
+            RateMangaRequest { manga_id, score },
+        )
+        .await?;
+    println!("Rated {} as {}/10", manga_id, resp.score);
+    Ok(())
+}
+
+async fn fetch_user_stats(server: String, token: Option<String>) -> Result<()> {
+    let token = token.context("API token required. Run: sakuin config --token <token>")?;
+    let client = GrpcWebClient::new(server, Some(token));
+    let resp: proto::GetUserStatsResponse = client
+        .call(
+            "manga.v1.UserService",
+            "GetUserStats",
+            GetUserStatsRequest {
+                token: String::new(),
+            },
+        )
+        .await?;
+    if let Some(stats) = resp.stats {
+        println!("Planning: {}", stats.planning);
+        println!("Reading: {}", stats.reading);
+        println!("Completed: {}", stats.completed);
+        println!("On hold: {}", stats.on_hold);
+        println!("Dropped: {}", stats.dropped);
+        println!("Not interested: {}", stats.not_interested);
+        println!("Total: {}", stats.total);
+        if let Some(avg) = stats.average_score {
+            println!("Average score: {:.1}", avg);
+        }
+        println!("Ratings count: {}", stats.ratings_count);
+    }
     Ok(())
 }
 

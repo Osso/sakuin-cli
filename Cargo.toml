@@ -6,6 +6,9 @@ description = "CLI client for Sakuin manga database API"
 repository = "https://github.com/Osso/sakuin-cli"
 license = "MIT"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+
 [[bin]]
 name = "sakuin"
 path = "src/main.rs"

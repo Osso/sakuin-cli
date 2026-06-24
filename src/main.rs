@@ -1,3 +1,5 @@
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -82,12 +84,14 @@ struct Config {
     token: Option<String>,
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn config_path() -> PathBuf {
     directories::ProjectDirs::from("", "", "sakuin-cli")
         .map(|d| d.config_dir().join("config.json"))
         .unwrap_or_else(|| PathBuf::from("config.json"))
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn load_config() -> Config {
     let path = config_path();
     std::fs::read_to_string(&path)
@@ -96,6 +100,7 @@ fn load_config() -> Config {
         .unwrap_or_default()
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn save_config(config: &Config) -> Result<()> {
     let path = config_path();
     if let Some(parent) = path.parent() {
@@ -133,7 +138,13 @@ fn format_status(s: i32) -> &'static str {
 }
 
 #[tokio::main]
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn main() -> Result<()> {
+    run().await
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+async fn run() -> Result<()> {
     let cli = Cli::parse();
     let config = load_config();
 
@@ -144,32 +155,31 @@ async fn main() -> Result<()> {
         Command::Config {
             server: new_server,
             token: new_token,
-        } => update_config(new_server, new_token)?,
+        } => update_config(new_server, new_token),
 
-        Command::Stats => fetch_stats(server).await?,
+        Command::Stats => fetch_stats(server).await,
 
-        Command::Search { query, limit } => search_manga(server, query, limit).await?,
+        Command::Search { query, limit } => search_manga(server, query, limit).await,
 
-        Command::Get { id } => get_manga(server, id).await?,
+        Command::Get { id } => get_manga(server, id).await,
 
-        Command::List { page, per_page } => list_manga(server, page, per_page).await?,
+        Command::List { page, per_page } => list_manga(server, page, per_page).await,
 
-        Command::ListMine { status } => list_mine(server, token, status).await?,
+        Command::ListMine { status } => list_mine(server, token, status).await,
 
-        Command::Track { manga_id, status } => track_manga(server, token, manga_id, status).await?,
+        Command::Track { manga_id, status } => track_manga(server, token, manga_id, status).await,
 
         Command::Progress { manga_id, progress } => {
-            set_progress(server, token, manga_id, progress).await?
+            set_progress(server, token, manga_id, progress).await
         }
 
-        Command::Rate { manga_id, score } => rate_manga(server, token, manga_id, score).await?,
+        Command::Rate { manga_id, score } => rate_manga(server, token, manga_id, score).await,
 
-        Command::StatsMine => fetch_user_stats(server, token).await?,
+        Command::StatsMine => fetch_user_stats(server, token).await,
     }
-
-    Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn update_config(new_server: Option<String>, new_token: Option<String>) -> Result<()> {
     let mut config = load_config();
     if let Some(s) = new_server {
@@ -189,6 +199,7 @@ fn update_config(new_server: Option<String>, new_token: Option<String>) -> Resul
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn fetch_stats(server: String) -> Result<()> {
     let client = GrpcWebClient::new(server, None);
     let resp: proto::Stats = client
@@ -199,6 +210,7 @@ async fn fetch_stats(server: String) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn search_manga(server: String, query: String, limit: i32) -> Result<()> {
     let client = GrpcWebClient::new(server, None);
     let resp: proto::SearchMangaResponse = client
@@ -226,6 +238,7 @@ async fn search_manga(server: String, query: String, limit: i32) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn get_manga(server: String, id: i64) -> Result<()> {
     let client = GrpcWebClient::new(server, None);
     let manga: Manga = client
@@ -235,6 +248,7 @@ async fn get_manga(server: String, id: i64) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn list_manga(server: String, page: i32, per_page: i32) -> Result<()> {
     let client = GrpcWebClient::new(server, None);
     let resp: proto::ListMangaResponse = client
@@ -266,6 +280,7 @@ async fn list_manga(server: String, page: i32, per_page: i32) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn list_mine(server: String, token: Option<String>, status: Option<String>) -> Result<()> {
     let token = token.context("API token required. Run: sakuin config --token <token>")?;
     let client = GrpcWebClient::new(server, Some(token));
@@ -295,6 +310,7 @@ async fn list_mine(server: String, token: Option<String>, status: Option<String>
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn track_manga(
     server: String,
     token: Option<String>,
@@ -319,6 +335,7 @@ async fn track_manga(
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn set_progress(
     server: String,
     token: Option<String>,
@@ -338,6 +355,7 @@ async fn set_progress(
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn rate_manga(
     server: String,
     token: Option<String>,
@@ -360,6 +378,7 @@ async fn rate_manga(
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 async fn fetch_user_stats(server: String, token: Option<String>) -> Result<()> {
     let token = token.context("API token required. Run: sakuin config --token <token>")?;
     let client = GrpcWebClient::new(server, Some(token));
@@ -414,4 +433,83 @@ fn manga_to_json(manga: &proto::Manga) -> serde_json::Value {
             "mal_score": s.mal_score,
         })),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn cli_definition_is_valid() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn parse_status_accepts_documented_aliases() {
+        assert_eq!(parse_status("planning").unwrap(), ReadingStatus::Planning);
+        assert_eq!(parse_status("reading").unwrap(), ReadingStatus::Reading);
+        assert_eq!(parse_status("completed").unwrap(), ReadingStatus::Completed);
+        assert_eq!(parse_status("onhold").unwrap(), ReadingStatus::OnHold);
+        assert_eq!(
+            parse_status("not_interested").unwrap(),
+            ReadingStatus::NotInterested
+        );
+        assert!(parse_status("later").is_err());
+    }
+
+    #[test]
+    fn format_status_maps_known_and_unknown_codes() {
+        assert_eq!(format_status(ReadingStatus::Planning as i32), "planning");
+        assert_eq!(format_status(ReadingStatus::Reading as i32), "reading");
+        assert_eq!(format_status(ReadingStatus::Completed as i32), "completed");
+        assert_eq!(format_status(ReadingStatus::OnHold as i32), "on_hold");
+        assert_eq!(format_status(ReadingStatus::Dropped as i32), "dropped");
+        assert_eq!(
+            format_status(ReadingStatus::NotInterested as i32),
+            "not_interested"
+        );
+        assert_eq!(format_status(999), "unknown");
+    }
+
+    #[test]
+    fn config_roundtrips_through_json() {
+        let config = Config {
+            server: Some("https://sakuin.test".to_string()),
+            token: Some("token".to_string()),
+        };
+
+        let encoded = serde_json::to_string(&config).unwrap();
+        let decoded: Config = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded.server.as_deref(), Some("https://sakuin.test"));
+        assert_eq!(decoded.token.as_deref(), Some("token"));
+    }
+
+    #[test]
+    fn manga_to_json_includes_scores_and_tags() {
+        let manga = Manga {
+            id: 42,
+            title_english: Some("English".to_string()),
+            tags: vec![proto::Tag {
+                name: "Action".to_string(),
+                group: "genre".to_string(),
+            }],
+            scores: Some(proto::MangaScores {
+                user_score: Some(8.0),
+                user_count: 3,
+                mangadex_score: Some(7.0),
+                anilist_score: Some(80),
+                mal_score: Some(7.5),
+            }),
+            ..Manga::default()
+        };
+
+        let json = manga_to_json(&manga);
+
+        assert_eq!(json["id"], 42);
+        assert_eq!(json["title_english"], "English");
+        assert_eq!(json["tags"][0]["name"], "Action");
+        assert_eq!(json["scores"]["user_count"], 3);
+    }
 }
